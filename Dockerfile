@@ -8,7 +8,7 @@ RUN apk add --no-cache git && \
     go mod download
 
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /mc-agent
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /mc-agent ./app
 
 FROM alpine:3.18
 RUN addgroup -S app && adduser -S -G app app

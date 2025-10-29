@@ -18,7 +18,7 @@ Notes:
 - If you want to run locally without Docker, ensure you have Go 1.20+ and run:
 
 ```bash
-go build -v
+go build -v -o mc-agent ./app
 ./mc-agent
 ```
 
@@ -29,6 +29,7 @@ Security: make sure you keep `.env` secret and do not commit it to git. `.docker
 
 主なファイル
 - `main.go` - `.env`を読み、`settings.json`を読み書きする簡単なプログラム。
+ - `app/main.go` - `.env`を読み、`settings.json`を読み書きする簡単なプログラム。
 - `Dockerfile` - マルチステージビルドでバイナリを作成し、ランタイムイメージを生成します。
 
 ビルドと実行例
