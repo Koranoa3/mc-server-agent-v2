@@ -1,0 +1,48 @@
+{
+    "log_level": "INFO",
+    "regular_task": {
+        "interval": 5,
+        "auto_shutdown_delay": 600
+    },
+    "registered_containers": {
+        "main": {
+            "display_name": "メインサーバー",
+            "container_name": "minecraft-main",
+            "path": "/srv/minecraft/main/",
+            "icon": "<:mc_main:1293071907645554718>",
+            "auto_shutdown": true
+        },
+        "creative": {
+            "display_name": "クリエサーバー",
+            "container_name": "minecraft-creative",
+            "path": "/srv/minecraft/creative/",
+            "icon": "<:mc_creative:1293071960540053504>",
+            "auto_shutdown": false
+        },
+        "industry": {
+            "display_name": "工業サーバー",
+            "container_name": "minecraft-industry",
+            "path": "/srv/minecraft/industry/",
+            "icon": "<:mc_industry:1338765036881186837>",
+            "auto_shutdown": false
+        }
+    },
+    "message_deleteafter": 7,
+    "allowed_actions":{
+        "power_on": true,
+        "power_off": true,
+        "terminate": true,
+        "show_status": true,
+        "place_buttons": true
+    },
+    "icons": {
+        "poweron_color": "<:poweron1:1314074126738128948>",
+        "poweron_mono": "<:poweron2:1314074145528746064>",
+        "poweroff_color": "<:poweroff1:1314074160741486733>",
+        "poweroff_mono": "<:poweroff2:1314074180978872420>",
+        "mag_color": "<:magglass1:1314074200604016700>",
+        "mag_mono": "<:magglass2:1314074214210338897>",
+        "allow": "<:allow:1311506170887933992>",
+        "deny": "<:deny:1311506182405619813>"
+    }
+}
