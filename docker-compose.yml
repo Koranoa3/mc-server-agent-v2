@@ -1,0 +1,15 @@
+version: '3.8'
+services:
+  mc-agent:
+    build: .
+    image: mc-server-agent:latest
+    container_name: mc-server-agent
+    # Run container with same UID:GID as host to allow writing mounted files like settings.json
+    # You can set UID/GID in your shell (export UID=$(id -u); export GID=$(id -g)) or add them to .env
+    user: "${UID}:${GID}"
+    env_file:
+      - .env
+    volumes:
+      - ./settings.json:/data/settings.json:rw
+    # restart: unless-stopped
+    # No ports required for this example; container runs as background agent

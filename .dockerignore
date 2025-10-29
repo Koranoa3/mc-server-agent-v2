@@ -1,0 +1,12 @@
+.env
+settings.json
+bin
+*.log
+.git
+_output
+**/*.tmp
+Dockerfile.git
+.github
+*.exe
+*.test
+**/tmp
