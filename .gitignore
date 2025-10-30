@@ -3,3 +3,4 @@ settings.json
 *.log
 
 .vscode/
+*.examples/

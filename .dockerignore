@@ -10,3 +10,4 @@ Dockerfile.git
 *.exe
 *.test
 **/tmp
+*.examples/
