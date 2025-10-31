@@ -2,12 +2,35 @@ package discord
 
 import (
 	"fmt"
-	"time"
+	"regexp"
 	"sort"
+	"time"
 
 	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/bwmarrin/discordgo"
 )
+
+// parseEmoji はカスタム絵文字文字列をパースする
+// 形式: <:name:id> または <a:name:id>
+func parseEmoji(emojiStr string) *discordgo.ComponentEmoji {
+	// カスタム絵文字のパターン
+	pattern := regexp.MustCompile(`<(a)?:([^:]+):(\d+)>`)
+	matches := pattern.FindStringSubmatch(emojiStr)
+
+	if len(matches) == 4 {
+		// カスタム絵文字
+		return &discordgo.ComponentEmoji{
+			Name:     matches[2], // 絵文字名
+			ID:       matches[3], // 絵文字ID
+			Animated: matches[1] == "a",
+		}
+	}
+
+	// Unicode 絵文字またはパース失敗時
+	return &discordgo.ComponentEmoji{
+		Name: emojiStr,
+	}
+}
 
 // buildStatusEmbed はコンテナステータスの Embed を構築
 func (b *Bot) buildStatusEmbed() *discordgo.MessageEmbed {
@@ -110,15 +133,31 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 
 		buttons := []discordgo.MessageComponent{}
 
+		// Start ボタン用の絵文字取得
+		startEmoji := "▶️"
+		if icon, ok := b.settings.Icons["poweron_mono"]; ok {
+			startEmoji = icon
+		}
+
+		// Stop ボタン用の絵文字取得
+		stopEmoji := "⏹️"
+		if icon, ok := b.settings.Icons["poweroff_mono"]; ok {
+			stopEmoji = icon
+		}
+
+		// Restart ボタン用の絵文字取得
+		restartEmoji := "🔄"
+		if icon, ok := b.settings.Icons["mag_mono"]; ok {
+			restartEmoji = icon
+		}
+
 		// Start ボタン
 		if b.settings.AllowedActions.PowerOn && cont.Status != container.StatusRunning {
 			buttons = append(buttons, discordgo.Button{
 				Label:    "Start",
 				Style:    discordgo.SuccessButton,
 				CustomID: fmt.Sprintf("start:%s", id),
-				Emoji: &discordgo.ComponentEmoji{
-					Name: "▶️",
-				},
+				Emoji:    parseEmoji(startEmoji),
 			})
 		}
 
@@ -128,9 +167,7 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 				Label:    "Stop",
 				Style:    discordgo.DangerButton,
 				CustomID: fmt.Sprintf("stop:%s", id),
-				Emoji: &discordgo.ComponentEmoji{
-					Name: "⏹️",
-				},
+				Emoji:    parseEmoji(stopEmoji),
 			})
 		}
 
@@ -140,9 +177,7 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 				Label:    "Restart",
 				Style:    discordgo.PrimaryButton,
 				CustomID: fmt.Sprintf("restart:%s", id),
-				Emoji: &discordgo.ComponentEmoji{
-					Name: "🔄",
-				},
+				Emoji:    parseEmoji(restartEmoji),
 			})
 		}
 
@@ -167,15 +202,19 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 
 	// Refresh ボタンを最後に追加
 	if len(rows) > 0 {
+		// Refresh アイコン取得
+		refreshEmoji := "🔄"
+		if icon, ok := b.settings.Icons["mag_mono"]; ok {
+			refreshEmoji = icon
+		}
+
 		rows = append(rows, discordgo.ActionsRow{
 			Components: []discordgo.MessageComponent{
 				discordgo.Button{
 					Label:    "Refresh Status",
 					Style:    discordgo.SecondaryButton,
 					CustomID: "refresh:all",
-					Emoji: &discordgo.ComponentEmoji{
-						Name: "🔄",
-					},
+					Emoji:    parseEmoji(refreshEmoji),
 				},
 			},
 		})
@@ -188,12 +227,24 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 func (b *Bot) getStatusIcon(status container.WorkingStatus) string {
 	switch status {
 	case container.StatusRunning:
+		if icon, ok := b.settings.Icons["poweron_mono"]; ok {
+			return icon
+		}
 		return "🟢"
 	case container.StatusStarting:
+		if icon, ok := b.settings.Icons["mag_mono"]; ok {
+			return icon
+		}
 		return "🟡"
 	case container.StatusStopped:
+		if icon, ok := b.settings.Icons["poweroff_mono"]; ok {
+			return icon
+		}
 		return "🔴"
 	case container.StatusNotFound:
+		if icon, ok := b.settings.Icons["deny"]; ok {
+			return icon
+		}
 		return "❓"
 	default:
 		return "⚪"
@@ -222,9 +273,7 @@ func (b *Bot) buildServerSelectMenu() discordgo.SelectMenu {
 			Label:       config.DisplayName,
 			Value:       id,
 			Description: description,
-			Emoji: &discordgo.ComponentEmoji{
-				Name: emoji,
-			},
+			Emoji:       parseEmoji(emoji),
 		})
 	}
 
