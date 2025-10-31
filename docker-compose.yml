@@ -3,7 +3,7 @@ services:
     build: .
     image: mc-server-agent:latest
     container_name: mc-server-agent
-    user: "root"
+    user: "${UID}:${DOCKER_GID}"
     env_file:
       - .env
     volumes:
@@ -12,4 +12,3 @@ services:
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
     # restart: unless-stopped
-    # No ports required for this example; container runs as background agent

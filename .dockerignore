@@ -1,5 +1,7 @@
 .env
+.env.example
 settings.json
+settings.example.json
 bin
 *.log
 .git
