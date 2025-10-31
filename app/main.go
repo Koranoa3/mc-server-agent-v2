@@ -8,14 +8,21 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Koranoa3/mc-server-agent/internal/discord"
 	"github.com/Koranoa3/mc-server-agent/internal/docker"
 	"github.com/Koranoa3/mc-server-agent/internal/routine"
 	"github.com/Koranoa3/mc-server-agent/internal/state"
 	"github.com/Koranoa3/mc-server-agent/internal/utilities"
+	"github.com/joho/godotenv"
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
+	// .env ファイルを読み込み
+	if err := godotenv.Load(); err != nil {
+		log.Warn().Err(err).Msg("No .env file found, using environment variables")
+	}
+
 	// 設定ファイルの読み込み
 	settingsPath := os.Getenv("SETTINGS_PATH")
 	if settingsPath == "" {
@@ -62,6 +69,33 @@ func main() {
 	} else {
 		containers := appState.GetAllContainers()
 		log.Info().Int("count", len(containers)).Msg("Containers loaded")
+	}
+
+	// Discord Bot の初期化と起動
+	discordToken := os.Getenv("DISCORD_BOT_TOKEN")
+	discordGuildID := os.Getenv("DISCORD_GUILD_ID")
+	discordAppID := os.Getenv("DISCORD_APP_ID")
+
+	var discordBot *discord.Bot
+	if discordToken != "" && discordGuildID != "" && discordAppID != "" {
+		discordBot, err = discord.NewBot(discordToken, discordGuildID, discordAppID, settings, appState, commandChan)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to create Discord bot")
+		}
+
+		if err := discordBot.Start(ctx); err != nil {
+			log.Fatal().Err(err).Msg("Failed to start Discord bot")
+		}
+		log.Info().Msg("Discord bot started")
+
+		// Cleanup 時に Discord Bot を停止
+		defer func() {
+			if err := discordBot.Stop(); err != nil {
+				log.Error().Err(err).Msg("Failed to stop Discord bot")
+			}
+		}()
+	} else {
+		log.Warn().Msg("Discord bot credentials not found, running without Discord integration")
 	}
 
 	// Routine goroutine の起動
