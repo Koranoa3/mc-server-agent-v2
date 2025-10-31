@@ -135,7 +135,7 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 
 		// Start ボタン用の絵文字取得
 		startEmoji := "▶️"
-		if icon, ok := b.settings.Icons["poweron_mono"]; ok {
+		if icon, ok := b.settings.Icons["poweron"]; ok {
 			startEmoji = icon
 		}
 
@@ -204,7 +204,7 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 	if len(rows) > 0 {
 		// Refresh アイコン取得
 		refreshEmoji := "🔄"
-		if icon, ok := b.settings.Icons["mag_mono"]; ok {
+		if icon, ok := b.settings.Icons["reload"]; ok {
 			refreshEmoji = icon
 		}
 
@@ -227,17 +227,17 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 func (b *Bot) getStatusIcon(status container.WorkingStatus) string {
 	switch status {
 	case container.StatusRunning:
-		if icon, ok := b.settings.Icons["poweron_mono"]; ok {
+		if icon, ok := b.settings.Icons["poweron"]; ok {
 			return icon
 		}
 		return "🟢"
 	case container.StatusStarting:
-		if icon, ok := b.settings.Icons["mag_mono"]; ok {
+		if icon, ok := b.settings.Icons["mag"]; ok {
 			return icon
 		}
 		return "🟡"
 	case container.StatusStopped:
-		if icon, ok := b.settings.Icons["poweroff_mono"]; ok {
+		if icon, ok := b.settings.Icons["poweroff"]; ok {
 			return icon
 		}
 		return "🔴"
