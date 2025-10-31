@@ -3,6 +3,7 @@ package discord
 import (
 	"fmt"
 	"time"
+	"sort"
 
 	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/bwmarrin/discordgo"
@@ -14,7 +15,15 @@ func (b *Bot) buildStatusEmbed() *discordgo.MessageEmbed {
 
 	fields := make([]*discordgo.MessageEmbedField, 0, len(containers))
 
-	for id, containerInterface := range containers {
+	// コンテナをIDでソート
+	ids := make([]string, 0, len(containers))
+	for id := range containers {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+
+	for _, id := range ids {
+		containerInterface := containers[id]
 		config, ok := b.settings.RegisteredContainers[id]
 		if !ok {
 			continue
@@ -46,7 +55,7 @@ func (b *Bot) buildStatusEmbed() *discordgo.MessageEmbed {
 
 		// 自動停止設定
 		if config.AutoShutdown {
-			value += "\n⏱️ Auto-shutdown: Enabled"
+			value += "\n⏱️ Auto-shutdown ON"
 		}
 
 		fields = append(fields, &discordgo.MessageEmbedField{
