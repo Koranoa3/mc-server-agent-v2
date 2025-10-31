@@ -145,12 +145,6 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 			stopEmoji = icon
 		}
 
-		// Restart ボタン用の絵文字取得
-		restartEmoji := "🔄"
-		if icon, ok := b.settings.Icons["mag_mono"]; ok {
-			restartEmoji = icon
-		}
-
 		// Start ボタン
 		if b.settings.AllowedActions.PowerOn && cont.Status != container.StatusRunning {
 			buttons = append(buttons, discordgo.Button{
@@ -168,16 +162,6 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 				Style:    discordgo.DangerButton,
 				CustomID: fmt.Sprintf("stop:%s", id),
 				Emoji:    parseEmoji(stopEmoji),
-			})
-		}
-
-		// Restart ボタン
-		if b.settings.AllowedActions.Terminate && cont.Status == container.StatusRunning {
-			buttons = append(buttons, discordgo.Button{
-				Label:    "Restart",
-				Style:    discordgo.PrimaryButton,
-				CustomID: fmt.Sprintf("restart:%s", id),
-				Emoji:    parseEmoji(restartEmoji),
 			})
 		}
 

@@ -125,31 +125,6 @@ func (b *Bot) defineCommands() {
 				},
 			},
 		},
-		{
-			Name:        "mc-restart",
-			Description: "Restart a Minecraft server",
-			NameLocalizations: &map[discordgo.Locale]string{
-				discordgo.Japanese: "mc-再起動",
-			},
-			DescriptionLocalizations: &map[discordgo.Locale]string{
-				discordgo.Japanese: "Minecraftサーバーを再起動",
-			},
-			Options: []*discordgo.ApplicationCommandOption{
-				{
-					Type:        discordgo.ApplicationCommandOptionString,
-					Name:        "server",
-					Description: "Server to restart",
-					NameLocalizations: map[discordgo.Locale]string{
-						discordgo.Japanese: "サーバー",
-					},
-					DescriptionLocalizations: map[discordgo.Locale]string{
-						discordgo.Japanese: "再起動するサーバー",
-					},
-					Required: true,
-					Choices:  b.buildServerChoices(),
-				},
-			},
-		},
 	}
 }
 

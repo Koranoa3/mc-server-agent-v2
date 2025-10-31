@@ -27,8 +27,6 @@ func (b *Bot) handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		b.handleStartCommand(s, i)
 	case "mc-stop":
 		b.handleStopCommand(s, i)
-	case "mc-restart":
-		b.handleRestartCommand(s, i)
 	default:
 		b.respondError(s, i, "Unknown command")
 	}
@@ -56,11 +54,9 @@ func (b *Bot) handleComponent(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	switch action {
 	case "start":
-		b.handleStartButton(s, i, containerID)
+		b.executeCommand(s, i, "start", containerID)
 	case "stop":
-		b.handleStopButton(s, i, containerID)
-	case "restart":
-		b.handleRestartButton(s, i, containerID)
+		b.executeCommand(s, i, "stop", containerID)
 	case "refresh":
 		b.handleRefreshButton(s, i)
 	default:
@@ -125,33 +121,6 @@ func (b *Bot) handleStopCommand(s *discordgo.Session, i *discordgo.InteractionCr
 
 	containerID := options[0].StringValue()
 	b.executeCommand(s, i, "stop", containerID)
-}
-
-// handleRestartCommand は /mc-restart コマンドを処理
-func (b *Bot) handleRestartCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
-	if len(options) == 0 {
-		b.respondError(s, i, "Server parameter is required")
-		return
-	}
-
-	containerID := options[0].StringValue()
-	b.executeCommand(s, i, "restart", containerID)
-}
-
-// handleStartButton は Start ボタンを処理
-func (b *Bot) handleStartButton(s *discordgo.Session, i *discordgo.InteractionCreate, containerID string) {
-	b.executeCommand(s, i, "start", containerID)
-}
-
-// handleStopButton は Stop ボタンを処理
-func (b *Bot) handleStopButton(s *discordgo.Session, i *discordgo.InteractionCreate, containerID string) {
-	b.executeCommand(s, i, "stop", containerID)
-}
-
-// handleRestartButton は Restart ボタンを処理
-func (b *Bot) handleRestartButton(s *discordgo.Session, i *discordgo.InteractionCreate, containerID string) {
-	b.executeCommand(s, i, "restart", containerID)
 }
 
 // handleRefreshButton は Refresh ボタンを処理
@@ -244,8 +213,6 @@ func (b *Bot) isActionAllowed(action string) bool {
 		return b.settings.AllowedActions.PowerOn
 	case "stop":
 		return b.settings.AllowedActions.PowerOff
-	case "restart":
-		return b.settings.AllowedActions.Terminate // restart は terminate として扱う
 	default:
 		return false
 	}
