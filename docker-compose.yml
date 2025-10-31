@@ -1,12 +1,14 @@
-version: '3.8'
 services:
   mc-agent:
     build: .
     image: mc-server-agent:latest
     container_name: mc-server-agent
+    user: "${UID}:${DOCKER_GID}"
     env_file:
       - .env
     volumes:
       - ./settings.json:/data/settings.json:rw
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
     # restart: unless-stopped
-    # No ports required for this example; container runs as background agent

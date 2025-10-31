@@ -1,14 +1,15 @@
-FROM golang:1.20-alpine AS build
-WORKDIR /src
+FROM golang:1.24-alpine AS build
+WORKDIR /src/app
 
-# Download dependencies
-COPY go.mod .
+# Download dependencies (module files are in app/)
+COPY app/go.mod app/go.sum ./
 RUN apk add --no-cache git && \
     go env -w GOPROXY=https://proxy.golang.org,direct && \
     go mod download
 
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /mc-agent ./app
+# Copy only app sources into build context
+COPY app/ .
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /mc-agent
 
 FROM alpine:3.18
 RUN addgroup -S app && adduser -S -G app app
