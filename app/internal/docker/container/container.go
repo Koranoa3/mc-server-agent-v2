@@ -4,10 +4,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
-	"time"
-	"strings"
 	"io"
 	"regexp"
+	"strings"
+	"time"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
@@ -28,6 +28,7 @@ type Container struct {
 	Health      string
 	Players     []Player
 	LastChecked time.Time
+	StopTimer   time.Time
 	StateHash   string
 
 	client *client.Client
@@ -42,6 +43,16 @@ func NewContainer(cli *client.Client, id, name string) *Container {
 		Players: []Player{},
 		client:  cli,
 	}
+}
+
+// SetClient sets the docker client for the container (exported so callers from other packages can set it)
+func (c *Container) SetClient(cli *client.Client) {
+	c.client = cli
+}
+
+// SetID sets the container ID
+func (c *Container) SetID(id string) {
+	c.ID = id
 }
 
 // Update はコンテナの最新情報を取得して更新
@@ -65,6 +76,7 @@ func (c *Container) Update(ctx context.Context) error {
 				c.Status = StatusRunning
 			case "starting":
 				c.Status = StatusStarting
+				c.StopTimer = time.Now()
 			default:
 				c.Status = StatusRunning // unhealthy でも running 扱い
 			}
@@ -78,6 +90,10 @@ func (c *Container) Update(ctx context.Context) error {
 			// プレイヤー取得失敗は致命的にしない。ログは呼び出し側で行う想定。
 		} else {
 			c.Players = players
+			// プレイヤーが存在する場合は StopTimer を更新
+			if len(players) > 0 {
+				c.StopTimer = time.Now()
+			}
 		}
 
 	} else {
