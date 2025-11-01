@@ -148,7 +148,7 @@ func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
 	}
 
 	// カンマ区切りでプレイヤー名を分割
-	names := strings.Split(playerNames, " ,")
+	names := strings.Split(playerNames, ",")
 	players := make([]Player, 0, len(names))
 	for _, name := range names {
 		name = strings.TrimSpace(name)
