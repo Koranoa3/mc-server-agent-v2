@@ -81,15 +81,6 @@ func (b *Bot) handleStatusCommand(s *discordgo.Session, i *discordgo.Interaction
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to respond to status command")
 	}
-	// 自動削除スケジュール
-	if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
-		go func() {
-			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
-			if err := s.InteractionResponseDelete(i.Interaction); err != nil {
-				log.Debug().Err(err).Msg("Failed to delete interaction response (status command)")
-			}
-		}()
-	}
 }
 
 // handleListCommand は /mc-list コマンドを処理
@@ -107,15 +98,6 @@ func (b *Bot) handleListCommand(s *discordgo.Session, i *discordgo.InteractionCr
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to respond to list command")
-	}
-	// 自動削除スケジュール
-	if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
-		go func() {
-			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
-			if err := s.InteractionResponseDelete(i.Interaction); err != nil {
-				log.Debug().Err(err).Msg("Failed to delete interaction response (list command)")
-			}
-		}()
 	}
 }
 
@@ -238,7 +220,8 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 			Msg("Command sent to channel")
 
 		// Followup メッセージで結果を通知（自動削除をスケジュール）
-		content := fmt.Sprintf("✅ `%s` command sent to **%s**", action, config.DisplayName)
+		allow_icon := b.settings.Icons["allow"]
+		content := fmt.Sprintf("%s `%s` command sent to **%s**", allow_icon, action, config.DisplayName)
 		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: content,
 		})
@@ -259,8 +242,9 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 	default:
 		log.Error().Msg("Command channel is full")
 		// エラーフォローアップ（自動削除）
+		deny_icon := b.settings.Icons["deny"]
 		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Command queue is full. Please try again later.",
+			Content: fmt.Sprintf("%s Command queue is full. Please try again later.", deny_icon),
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send error followup")
@@ -289,10 +273,11 @@ func (b *Bot) isActionAllowed(action string) bool {
 
 // respondError はエラーレスポンスを返す
 func (b *Bot) respondError(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+	deny_icon := b.settings.Icons["deny"]
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: "❌ " + message,
+			Content: fmt.Sprintf("%s %s", deny_icon, message),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
