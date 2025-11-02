@@ -131,6 +131,11 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 			continue
 		}
 
+		// StatusNotFound のコンテナはボタンを表示しない
+		if cont.Status == container.StatusNotFound {
+			continue
+		}
+
 		buttons := []discordgo.MessageComponent{}
 
 		// Start ボタン用の絵文字取得

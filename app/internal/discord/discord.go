@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/Koranoa3/mc-server-agent/internal/routine"
 	"github.com/Koranoa3/mc-server-agent/internal/state"
 	"github.com/Koranoa3/mc-server-agent/internal/utilities"
@@ -128,11 +129,21 @@ func (b *Bot) defineCommands() {
 	}
 }
 
-// buildServerChoices は設定から選択肢を構築
+// buildServerChoices は設定から選択肢を構築（存在しないコンテナは除外）
 func (b *Bot) buildServerChoices() []*discordgo.ApplicationCommandOptionChoice {
 	choices := make([]*discordgo.ApplicationCommandOptionChoice, 0, len(b.settings.RegisteredContainers))
 
 	for id, config := range b.settings.RegisteredContainers {
+		// コンテナの存在確認
+		if stateObj, ok := b.appState.GetContainer(id); ok {
+			if cont, ok := stateObj.(*container.Container); ok {
+				// StatusNotFound のコンテナは選択肢に含めない
+				if cont.Status == container.StatusNotFound {
+					continue
+				}
+			}
+		}
+
 		choices = append(choices, &discordgo.ApplicationCommandOptionChoice{
 			Name:  config.DisplayName,
 			Value: id,
