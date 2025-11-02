@@ -88,6 +88,9 @@ func main() {
 		}
 		log.Info().Msg("Discord bot started")
 
+		// 初期プレゼンスを設定
+		discordBot.UpdatePresence()
+
 		// Cleanup 時に Discord Bot を停止
 		defer func() {
 			if err := discordBot.Stop(); err != nil {
@@ -162,7 +165,11 @@ func main() {
 				Str("container", update.ContainerID).
 				Bool("changed", update.Changed).
 				Msg("Status update received")
-			// TODO: Discord へ通知
+
+			// Discord Bot のプレゼンスを更新
+			if discordBot != nil {
+				discordBot.UpdatePresence()
+			}
 
 		case err := <-errorChan:
 			log.Error().Err(err).Msg("Error received")
