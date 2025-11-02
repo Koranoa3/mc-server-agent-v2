@@ -8,6 +8,7 @@ require (
 	github.com/bwmarrin/discordgo v0.29.0
 	github.com/docker/docker v28.5.1+incompatible
 	github.com/joho/godotenv v1.5.1
+	github.com/rs/zerolog v1.34.0
 )
 
 require (
@@ -22,6 +23,8 @@ require (
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/mattn/go-colorable v0.1.13 // indirect
+	github.com/mattn/go-isatty v0.0.19 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/sys/atomicwriter v0.1.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
