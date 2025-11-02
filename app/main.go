@@ -168,11 +168,6 @@ func main() {
 			log.Error().Err(err).Msg("Error received")
 			// TODO: Discord へエラー通知
 
-		case <-ticker.C:
-			log.Debug().Msg("Periodic container check")
-			if err := dockerManager.UpdateAllContainers(ctx); err != nil {
-				log.Error().Err(err).Msg("Failed to update containers")
-			}
 		}
 	}
 }

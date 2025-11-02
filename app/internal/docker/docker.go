@@ -8,6 +8,7 @@ import (
 	"github.com/Koranoa3/mc-server-agent/internal/state"
 	dockertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
+	"github.com/rs/zerolog/log"
 )
 
 // Manager は Docker コンテナを管理
@@ -53,8 +54,24 @@ func (m *Manager) UpdateAllContainers(ctx context.Context) error {
 			// コンテナ名が一致するか確認（名前は "/name" 形式なので注意）
 			for _, name := range c.Names {
 				if name == "/"+cfg.ContainerName || name == cfg.ContainerName {
-					// コンテナを作成または更新
-					cont := container.NewContainer(m.client, c.ID, cfg.ContainerName)
+					// 可能であれば以前の container オブジェクトを再利用して状態（LastActive 等）を保持する
+					var cont *container.Container
+					if existing, ok := m.state.GetContainer(key); ok {
+						if ec, ok := existing.(*container.Container); ok {
+							cont = ec
+							// 更新される Docker クライアントや ID をセット（必要なら上書き）
+							cont.SetClient(m.client)
+							if cont.ID == "" {
+								cont.SetID(c.ID)
+							}
+						}
+					}
+					if cont == nil {
+						log.Debug().Str("container", cfg.ContainerName).Msg("Creating new container instance")
+						cont = container.NewContainer(m.client, c.ID, cfg.ContainerName)
+					}
+					// ID が変わっている場合は最新の ID を反映
+					cont.SetID(c.ID)
 					if err := cont.Update(ctx); err != nil {
 						return fmt.Errorf("failed to update container %s: %w", key, err)
 					}

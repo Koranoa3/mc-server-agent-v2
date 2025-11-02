@@ -4,6 +4,9 @@ import (
 	"context"
 	"crypto/sha256"
 	"fmt"
+	"io"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -25,6 +28,7 @@ type Container struct {
 	Health      string
 	Players     []Player
 	LastChecked time.Time
+	StopTimer   time.Time
 	StateHash   string
 
 	client *client.Client
@@ -39,6 +43,16 @@ func NewContainer(cli *client.Client, id, name string) *Container {
 		Players: []Player{},
 		client:  cli,
 	}
+}
+
+// SetClient sets the docker client for the container (exported so callers from other packages can set it)
+func (c *Container) SetClient(cli *client.Client) {
+	c.client = cli
+}
+
+// SetID sets the container ID
+func (c *Container) SetID(id string) {
+	c.ID = id
 }
 
 // Update はコンテナの最新情報を取得して更新
@@ -62,20 +76,91 @@ func (c *Container) Update(ctx context.Context) error {
 				c.Status = StatusRunning
 			case "starting":
 				c.Status = StatusStarting
+				c.StopTimer = time.Now()
 			default:
 				c.Status = StatusRunning // unhealthy でも running 扱い
 			}
 		} else {
 			c.Status = StatusRunning
 		}
+
+		// 仮実装：プレイヤー情報を取得（後で実装予定の RCON/exec に置き換える）
+		players, perr := c.fetchPlayers(ctx)
+		if perr != nil {
+			// プレイヤー取得失敗は致命的にしない。ログは呼び出し側で行う想定。
+		} else {
+			c.Players = players
+			// プレイヤーが存在する場合は StopTimer を更新
+			if len(players) > 0 {
+				c.StopTimer = time.Now()
+			}
+		}
+
 	} else {
+		// 停止中はプレイヤーリストをクリア
 		c.Status = StatusStopped
+		c.Players = []Player{}
 	}
 
 	// ハッシュ生成（状態変更検知用）
 	c.StateHash = c.computeHash()
 
 	return nil
+}
+
+// fetchPlayers はプレイヤー一覧を取得する仮実装
+func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
+	// rcon-cli list コマンドを実行
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"rcon-cli", "list"},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execID, err := c.client.ContainerExecCreate(ctx, c.ID, execConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	resp, err := c.client.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach exec: %w", err)
+	}
+	defer resp.Close()
+
+	// 出力を読み取る
+	output, err := io.ReadAll(resp.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read exec output: %w", err)
+	}
+
+	// "players online: (.+)" の正規表現でマッチング
+	re := regexp.MustCompile(`players online:\s*(.+)`)
+	matches := re.FindStringSubmatch(string(output))
+	if len(matches) < 2 {
+		// マッチしない場合はプレイヤーなし
+		return []Player{}, nil
+	}
+
+	playerNames := matches[1]
+	if playerNames == "" || playerNames == "0" {
+		return []Player{}, nil
+	}
+
+	// カンマ区切りでプレイヤー名を分割
+	names := strings.Split(playerNames, ",")
+	players := make([]Player, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			players = append(players, Player{
+				Name: name,
+				UUID: "", // RCON では UUID が取得できないため空
+			})
+		}
+	}
+
+	return players, nil
 }
 
 // Start はコンテナを起動

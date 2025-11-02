@@ -3,7 +3,9 @@ package discord
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/Koranoa3/mc-server-agent/internal/routine"
 	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog/log"
@@ -27,8 +29,6 @@ func (b *Bot) handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		b.handleStartCommand(s, i)
 	case "mc-stop":
 		b.handleStopCommand(s, i)
-	case "mc-restart":
-		b.handleRestartCommand(s, i)
 	default:
 		b.respondError(s, i, "Unknown command")
 	}
@@ -56,11 +56,9 @@ func (b *Bot) handleComponent(s *discordgo.Session, i *discordgo.InteractionCrea
 
 	switch action {
 	case "start":
-		b.handleStartButton(s, i, containerID)
+		b.executeCommand(s, i, "start", containerID)
 	case "stop":
-		b.handleStopButton(s, i, containerID)
-	case "restart":
-		b.handleRestartButton(s, i, containerID)
+		b.executeCommand(s, i, "stop", containerID)
 	case "refresh":
 		b.handleRefreshButton(s, i)
 	default:
@@ -127,33 +125,6 @@ func (b *Bot) handleStopCommand(s *discordgo.Session, i *discordgo.InteractionCr
 	b.executeCommand(s, i, "stop", containerID)
 }
 
-// handleRestartCommand は /mc-restart コマンドを処理
-func (b *Bot) handleRestartCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	options := i.ApplicationCommandData().Options
-	if len(options) == 0 {
-		b.respondError(s, i, "Server parameter is required")
-		return
-	}
-
-	containerID := options[0].StringValue()
-	b.executeCommand(s, i, "restart", containerID)
-}
-
-// handleStartButton は Start ボタンを処理
-func (b *Bot) handleStartButton(s *discordgo.Session, i *discordgo.InteractionCreate, containerID string) {
-	b.executeCommand(s, i, "start", containerID)
-}
-
-// handleStopButton は Stop ボタンを処理
-func (b *Bot) handleStopButton(s *discordgo.Session, i *discordgo.InteractionCreate, containerID string) {
-	b.executeCommand(s, i, "stop", containerID)
-}
-
-// handleRestartButton は Restart ボタンを処理
-func (b *Bot) handleRestartButton(s *discordgo.Session, i *discordgo.InteractionCreate, containerID string) {
-	b.executeCommand(s, i, "restart", containerID)
-}
-
 // handleRefreshButton は Refresh ボタンを処理
 func (b *Bot) handleRefreshButton(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	embed := b.buildStatusEmbed()
@@ -181,9 +152,43 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
+	// コンテナの現在状態をチェックして即時エラーメッセージを返す（起動済み・停止済み・プレイヤー在籍など）
+	if stateObj, ok := b.appState.GetContainer(containerID); ok {
+		if cont, ok := stateObj.(*container.Container); ok {
+			switch action {
+			case "start":
+				if cont.Status == container.StatusRunning {
+					b.respondError(s, i, fmt.Sprintf("%s is already running.", config.DisplayName))
+					return
+				}
+				if cont.Status == container.StatusStarting {
+					b.respondError(s, i, fmt.Sprintf("%s is currently starting. Please wait and try again.", config.DisplayName))
+					return
+				}
+				if cont.Status == container.StatusNotFound || cont.ID == "" {
+					b.respondError(s, i, fmt.Sprintf("%s is currently unavailable (container not found).", config.DisplayName))
+					return
+				}
+			case "stop":
+				if cont.Status == container.StatusStopped || cont.Status == container.StatusNotFound {
+					b.respondError(s, i, fmt.Sprintf("%s is already stopped.", config.DisplayName))
+					return
+				}
+				if len(cont.Players) > 0 {
+					b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, len(cont.Players)))
+					return
+				}
+			}
+		}
+	} else {
+		// state に存在しない場合は警告として返す
+		b.respondError(s, i, fmt.Sprintf("Unable to retrieve status for %s. Please try again later.", config.DisplayName))
+		return
+	}
+
 	// アクション確認
 	if !b.isActionAllowed(action) {
-		b.respondError(s, i, fmt.Sprintf("Action '%s' is not allowed", action))
+		b.respondError(s, i, fmt.Sprintf("Sorry, the action `%s` is not allowed.", action))
 		return
 	}
 
@@ -214,25 +219,42 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 			Str("container", containerID).
 			Msg("Command sent to channel")
 
-		// Followup メッセージで結果を通知
-		content := fmt.Sprintf("✅ %s command sent to **%s**", action, config.DisplayName)
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		// Followup メッセージで結果を通知（自動削除をスケジュール）
+		allow_icon := b.settings.Icons["allow"]
+		content := fmt.Sprintf("%s `%s` command sent to **%s**", allow_icon, action, config.DisplayName)
+		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: content,
-			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send followup message")
+		} else {
+			if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+				go func(msg *discordgo.Message) {
+					time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+					if err := s.FollowupMessageDelete(i.Interaction, msg.ID); err != nil {
+						log.Debug().Err(err).Msg("Failed to delete followup message")
+					}
+				}(msg)
+			}
 		}
 
 	default:
 		log.Error().Msg("Command channel is full")
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
-			Content: "❌ Command queue is full. Please try again later.",
-			Flags:   discordgo.MessageFlagsEphemeral,
+		// エラーフォローアップ（自動削除）
+		deny_icon := b.settings.Icons["deny"]
+		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: fmt.Sprintf("%s Command queue is full. Please try again later.", deny_icon),
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send error followup")
+		} else if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+			go func(msg *discordgo.Message) {
+				time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+				if err := s.FollowupMessageDelete(i.Interaction, msg.ID); err != nil {
+					log.Debug().Err(err).Msg("Failed to delete error followup")
+				}
+			}(msg)
 		}
 	}
 }
@@ -244,8 +266,6 @@ func (b *Bot) isActionAllowed(action string) bool {
 		return b.settings.AllowedActions.PowerOn
 	case "stop":
 		return b.settings.AllowedActions.PowerOff
-	case "restart":
-		return b.settings.AllowedActions.Terminate // restart は terminate として扱う
 	default:
 		return false
 	}
@@ -253,15 +273,27 @@ func (b *Bot) isActionAllowed(action string) bool {
 
 // respondError はエラーレスポンスを返す
 func (b *Bot) respondError(s *discordgo.Session, i *discordgo.InteractionCreate, message string) {
+	deny_icon := b.settings.Icons["deny"]
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
-			Content: "❌ " + message,
+			Content: fmt.Sprintf("%s %s", deny_icon, message),
 			Flags:   discordgo.MessageFlagsEphemeral,
 		},
 	})
 
 	if err != nil {
 		log.Error().Err(err).Str("message", message).Msg("Failed to send error response")
+		return
+	}
+
+	// 自動削除スケジュール
+	if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+		go func() {
+			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+			if derr := s.InteractionResponseDelete(i.Interaction); derr != nil {
+				log.Debug().Err(derr).Msg("Failed to delete interaction response (error)")
+			}
+		}()
 	}
 }

@@ -77,13 +77,13 @@ func Run(ctx context.Context, appState *state.AppState, dockerMgr *docker.Manage
 				// 自動停止判定
 				settings := appState.GetSettings()
 				cfg, ok := settings.RegisteredContainers[key]
-				if !ok || !cfg.AutoShutdown {
+				if !ok || !cfg.AutoShutdown || cont.Status != container.StatusRunning {
 					continue
 				}
 
 				// 稼働中でプレイヤーゼロの場合
-				if cont.Status == container.StatusRunning && len(cont.Players) == 0 {
-					elapsed := time.Since(cont.LastChecked)
+				if cont.Status == container.StatusRunning && len(cont.Players) == 0 && !cont.StopTimer.IsZero() {
+					elapsed := time.Since(cont.StopTimer)
 					threshold := time.Duration(settings.RegularTask.AutoShutdownDelay) * time.Second
 
 					if elapsed >= threshold {
