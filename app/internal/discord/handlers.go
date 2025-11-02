@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/Koranoa3/mc-server-agent/internal/routine"
 	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog/log"
@@ -150,9 +151,43 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 		return
 	}
 
+	// コンテナの現在状態をチェックして即時エラーメッセージを返す（起動済み・停止済み・プレイヤー在籍など）
+	if stateObj, ok := b.appState.GetContainer(containerID); ok {
+		if cont, ok := stateObj.(*container.Container); ok {
+			switch action {
+			case "start":
+				if cont.Status == container.StatusRunning {
+					b.respondError(s, i, fmt.Sprintf("%s is already running.", config.DisplayName))
+					return
+				}
+				if cont.Status == container.StatusStarting {
+					b.respondError(s, i, fmt.Sprintf("%s is currently starting. Please wait and try again.", config.DisplayName))
+					return
+				}
+				if cont.Status == container.StatusNotFound || cont.ID == "" {
+					b.respondError(s, i, fmt.Sprintf("%s is currently unavailable (container not found).", config.DisplayName))
+					return
+				}
+			case "stop":
+				if cont.Status == container.StatusStopped || cont.Status == container.StatusNotFound {
+					b.respondError(s, i, fmt.Sprintf("%s is already stopped.", config.DisplayName))
+					return
+				}
+				if len(cont.Players) > 0 {
+					b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, len(cont.Players)))
+					return
+				}
+			}
+		}
+	} else {
+		// state に存在しない場合は警告として返す
+		b.respondError(s, i, fmt.Sprintf("Unable to retrieve status for %s. Please try again later.", config.DisplayName))
+		return
+	}
+
 	// アクション確認
 	if !b.isActionAllowed(action) {
-		b.respondError(s, i, fmt.Sprintf("Action '%s' is not allowed", action))
+		b.respondError(s, i, fmt.Sprintf("Sorry, the action `%s` is not allowed.", action))
 		return
 	}
 
@@ -184,7 +219,7 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 			Msg("Command sent to channel")
 
 		// Followup メッセージで結果を通知
-		content := fmt.Sprintf("✅ %s command sent to **%s**", action, config.DisplayName)
+		content := fmt.Sprintf("✅ `%s` command sent to **%s**", action, config.DisplayName)
 		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: content,
 			Flags:   discordgo.MessageFlagsEphemeral,
