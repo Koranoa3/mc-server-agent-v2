@@ -3,6 +3,7 @@ package discord
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/Koranoa3/mc-server-agent/internal/routine"
@@ -80,6 +81,15 @@ func (b *Bot) handleStatusCommand(s *discordgo.Session, i *discordgo.Interaction
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to respond to status command")
 	}
+	// 自動削除スケジュール
+	if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+		go func() {
+			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+			if err := s.InteractionResponseDelete(i.Interaction); err != nil {
+				log.Debug().Err(err).Msg("Failed to delete interaction response (status command)")
+			}
+		}()
+	}
 }
 
 // handleListCommand は /mc-list コマンドを処理
@@ -97,6 +107,15 @@ func (b *Bot) handleListCommand(s *discordgo.Session, i *discordgo.InteractionCr
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to respond to list command")
+	}
+	// 自動削除スケジュール
+	if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+		go func() {
+			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+			if err := s.InteractionResponseDelete(i.Interaction); err != nil {
+				log.Debug().Err(err).Msg("Failed to delete interaction response (list command)")
+			}
+		}()
 	}
 }
 
@@ -218,25 +237,40 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 			Str("container", containerID).
 			Msg("Command sent to channel")
 
-		// Followup メッセージで結果を通知
+		// Followup メッセージで結果を通知（自動削除をスケジュール）
 		content := fmt.Sprintf("✅ `%s` command sent to **%s**", action, config.DisplayName)
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: content,
-			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send followup message")
+		} else {
+			if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+				go func(msg *discordgo.Message) {
+					time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+					if err := s.FollowupMessageDelete(i.Interaction, msg.ID); err != nil {
+						log.Debug().Err(err).Msg("Failed to delete followup message")
+					}
+				}(msg)
+			}
 		}
 
 	default:
 		log.Error().Msg("Command channel is full")
-		_, err = s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		// エラーフォローアップ（自動削除）
+		msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 			Content: "❌ Command queue is full. Please try again later.",
-			Flags:   discordgo.MessageFlagsEphemeral,
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to send error followup")
+		} else if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+			go func(msg *discordgo.Message) {
+				time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+				if err := s.FollowupMessageDelete(i.Interaction, msg.ID); err != nil {
+					log.Debug().Err(err).Msg("Failed to delete error followup")
+				}
+			}(msg)
 		}
 	}
 }
@@ -265,5 +299,16 @@ func (b *Bot) respondError(s *discordgo.Session, i *discordgo.InteractionCreate,
 
 	if err != nil {
 		log.Error().Err(err).Str("message", message).Msg("Failed to send error response")
+		return
+	}
+
+	// 自動削除スケジュール
+	if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+		go func() {
+			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+			if derr := s.InteractionResponseDelete(i.Interaction); derr != nil {
+				log.Debug().Err(derr).Msg("Failed to delete interaction response (error)")
+			}
+		}()
 	}
 }
