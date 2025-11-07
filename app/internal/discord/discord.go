@@ -276,7 +276,6 @@ func (b *Bot) UpdatePinnedMessages() {
 		return
 	}
 
-	pinnedCount := 0
 	updatedCount := 0
 
 	// 各チャンネルでピン留めされたメッセージを確認
@@ -286,8 +285,8 @@ func (b *Bot) UpdatePinnedMessages() {
 			continue
 		}
 
-		// チャンネルのメッセージを最近の100件取得
-		messages, err := b.session.ChannelMessages(channel.ID, 100, "", "", "")
+		// 各チャンネルのピン留めメッセージを取得
+		messages, err := b.session.ChannelMessagesPinned(channel.ID)
 		if err != nil {
 			log.Error().Err(err).Str("channel_id", channel.ID).Msg("Failed to get channel messages")
 			continue
@@ -295,29 +294,8 @@ func (b *Bot) UpdatePinnedMessages() {
 
 		// 各メッセージを確認
 		for _, msg := range messages {
-			// Bot 自身のメッセージかチェック
-			if msg.Author.ID != b.session.State.User.ID {
-				continue
-			}
-
-			// ephemeral メッセージは Flags で判定
-			// ephemeral メッセージは通常のチャンネル取得では取得できないためスキップ可能
-			// さらに確実にするため、Embeds または Components があるか確認
-			if len(msg.Embeds) == 0 && len(msg.Components) == 0 {
-				continue
-			}
-
-			// 📌 リアクションがついているか確認
-			hasPushpin := false
-			for _, reaction := range msg.Reactions {
-				if reaction.Emoji.Name == "📌" {
-					hasPushpin = true
-					pinnedCount++
-					break
-				}
-			}
-
-			if !hasPushpin {
+			// Bot 自身のメッセージかつ、Embeds または Components があるかチェック
+			if msg.Author.ID != b.session.State.User.ID || (len(msg.Embeds) == 0 && len(msg.Components) == 0) {
 				continue
 			}
 
@@ -339,7 +317,7 @@ func (b *Bot) UpdatePinnedMessages() {
 					Str("message_id", msg.ID).
 					Msg("Failed to update pinned message")
 			} else {
-				log.Info().
+				log.Debug().
 					Str("channel_id", msg.ChannelID).
 					Str("message_id", msg.ID).
 					Msg("Updated pinned message")
@@ -349,7 +327,6 @@ func (b *Bot) UpdatePinnedMessages() {
 	}
 
 	log.Info().
-		Int("pinned_messages", pinnedCount).
 		Int("updated_messages", updatedCount).
 		Msg("Pinned messages update completed")
 }
