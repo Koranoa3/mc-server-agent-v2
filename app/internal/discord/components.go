@@ -190,24 +190,24 @@ func (b *Bot) buildActionButtons() []discordgo.MessageComponent {
 	}
 
 	// Refresh ボタンを最後に追加
-	if len(rows) > 0 {
-		// Refresh アイコン取得
-		refreshEmoji := "🔄"
-		if icon, ok := b.settings.Icons["reload_mono"]; ok {
-			refreshEmoji = icon
-		}
+	// if len(rows) > 0 {
+	// 	// Refresh アイコン取得
+	// 	refreshEmoji := "🔄"
+	// 	if icon, ok := b.settings.Icons["reload_mono"]; ok {
+	// 		refreshEmoji = icon
+	// 	}
 
-		rows = append(rows, discordgo.ActionsRow{
-			Components: []discordgo.MessageComponent{
-				discordgo.Button{
-					Label:    "Refresh Status",
-					Style:    discordgo.SecondaryButton,
-					CustomID: "refresh:all",
-					Emoji:    parseEmoji(refreshEmoji),
-				},
-			},
-		})
-	}
+	// 	rows = append(rows, discordgo.ActionsRow{
+	// 		Components: []discordgo.MessageComponent{
+	// 			discordgo.Button{
+	// 				Label:    "Refresh Status",
+	// 				Style:    discordgo.SecondaryButton,
+	// 				CustomID: "refresh:all",
+	// 				Emoji:    parseEmoji(refreshEmoji),
+	// 			},
+	// 		},
+	// 	})
+	// }
 
 	return rows
 }

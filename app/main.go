@@ -166,9 +166,10 @@ func main() {
 				Bool("changed", update.Changed).
 				Msg("Status update received")
 
-			// Discord Bot のプレゼンスを更新
+			// Discord Bot のプレゼンスと最後の常駐メッセージを更新
 			if discordBot != nil {
 				discordBot.UpdatePresence()
+				discordBot.UpdatePinnedMessages()
 			}
 
 		case err := <-errorChan:

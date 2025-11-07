@@ -263,3 +263,93 @@ func (b *Bot) UnregisterCommands() error {
 func (b *Bot) Session() *discordgo.Session {
 	return b.session
 }
+
+// UpdatePinnedMessages は📌リアクションがついた Bot のメッセージをすべて更新
+func (b *Bot) UpdatePinnedMessages() {
+	log.Info().Msg("Updating pinned messages")
+
+	// すべての登録済みチャンネルを取得
+	// guildID からギルドの全チャンネルを取得
+	channels, err := b.session.GuildChannels(b.guildID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get guild channels")
+		return
+	}
+
+	pinnedCount := 0
+	updatedCount := 0
+
+	// 各チャンネルでピン留めされたメッセージを確認
+	for _, channel := range channels {
+		// テキストチャンネルのみ対象
+		if channel.Type != discordgo.ChannelTypeGuildText {
+			continue
+		}
+
+		// チャンネルのメッセージを最近の100件取得
+		messages, err := b.session.ChannelMessages(channel.ID, 100, "", "", "")
+		if err != nil {
+			log.Error().Err(err).Str("channel_id", channel.ID).Msg("Failed to get channel messages")
+			continue
+		}
+
+		// 各メッセージを確認
+		for _, msg := range messages {
+			// Bot 自身のメッセージかチェック
+			if msg.Author.ID != b.session.State.User.ID {
+				continue
+			}
+
+			// ephemeral メッセージは Flags で判定
+			// ephemeral メッセージは通常のチャンネル取得では取得できないためスキップ可能
+			// さらに確実にするため、Embeds または Components があるか確認
+			if len(msg.Embeds) == 0 && len(msg.Components) == 0 {
+				continue
+			}
+
+			// 📌 リアクションがついているか確認
+			hasPushpin := false
+			for _, reaction := range msg.Reactions {
+				if reaction.Emoji.Name == "📌" {
+					hasPushpin = true
+					pinnedCount++
+					break
+				}
+			}
+
+			if !hasPushpin {
+				continue
+			}
+
+			// メッセージを更新
+			embed := b.buildStatusEmbed()
+			components := b.buildActionButtons()
+
+			_, err := b.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				Channel:    msg.ChannelID,
+				ID:         msg.ID,
+				Embeds:     &[]*discordgo.MessageEmbed{embed},
+				Components: &components,
+			})
+
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("channel_id", msg.ChannelID).
+					Str("message_id", msg.ID).
+					Msg("Failed to update pinned message")
+			} else {
+				log.Info().
+					Str("channel_id", msg.ChannelID).
+					Str("message_id", msg.ID).
+					Msg("Updated pinned message")
+				updatedCount++
+			}
+		}
+	}
+
+	log.Info().
+		Int("pinned_messages", pinnedCount).
+		Int("updated_messages", updatedCount).
+		Msg("Pinned messages update completed")
+}
