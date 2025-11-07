@@ -78,7 +78,7 @@ func (b *Bot) buildStatusEmbed() *discordgo.MessageEmbed {
 
 		// 自動停止設定
 		if config.AutoShutdown {
-			value += "\n⏱️ Auto-shutdown ON"
+			value += "\n⏱️ Auto-stop ON"
 		}
 
 		fields = append(fields, &discordgo.MessageEmbedField{
@@ -99,8 +99,7 @@ func (b *Bot) buildStatusEmbed() *discordgo.MessageEmbed {
 
 	embed := &discordgo.MessageEmbed{
 		Title:       "🖥️ Minecraft Server Status",
-		Description: "Current status of all registered servers",
-		Color:       0x00ff00, // Green
+		Color:       0x79d683, // Green
 		Fields:      fields,
 		Timestamp:   time.Now().Format(time.RFC3339),
 		Footer: &discordgo.MessageEmbedFooter{
@@ -237,40 +236,5 @@ func (b *Bot) getStatusIcon(status container.WorkingStatus) string {
 		return "❓"
 	default:
 		return "⚪"
-	}
-}
-
-// buildServerSelectMenu はサーバー選択メニューを構築（未使用だが将来用）
-func (b *Bot) buildServerSelectMenu() discordgo.SelectMenu {
-	options := make([]discordgo.SelectMenuOption, 0, len(b.settings.RegisteredContainers))
-
-	for id, config := range b.settings.RegisteredContainers {
-		cont, ok := b.appState.GetContainer(id)
-		if !ok {
-			continue
-		}
-
-		emoji := "⚪"
-		description := "Unknown status"
-
-		if c, ok := cont.(*container.Container); ok {
-			emoji = b.getStatusIcon(c.Status)
-			description = c.Status.JapaneseString()
-		}
-
-		options = append(options, discordgo.SelectMenuOption{
-			Label:       config.DisplayName,
-			Value:       id,
-			Description: description,
-			Emoji:       parseEmoji(emoji),
-		})
-	}
-
-	return discordgo.SelectMenu{
-		CustomID:    "server_select",
-		Placeholder: "Select a server...",
-		MinValues:   func() *int { v := 1; return &v }(),
-		MaxValues:   1,
-		Options:     options,
 	}
 }
