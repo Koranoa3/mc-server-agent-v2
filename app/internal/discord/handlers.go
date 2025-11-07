@@ -515,8 +515,9 @@ func (b *Bot) handleWhitelistList(s *discordgo.Session, i *discordgo.Interaction
 
 	// リストを整形
 	var builder strings.Builder
+	builder.WriteString("Check UUID at https://api.minecraftservices.com/minecraft/profile/lookup/YOUR-UUID \n")
 	builder.WriteString("```\n")
-	builder.WriteString(fmt.Sprintf("Total: %d players\n\n", len(entries)))
+	builder.WriteString(fmt.Sprintf("Whitelist Total: %d players\n\n", len(entries)))
 
 	userCache := map[string]string{}
 
@@ -542,7 +543,7 @@ func (b *Bot) handleWhitelistList(s *discordgo.Session, i *discordgo.Interaction
 				userCache[entry.AddedUserID] = addedBy
 			}
 		}
-		builder.WriteString(fmt.Sprintf("%2d. %-16s (Added by: %s)\n", idx+1, entry.Name, addedBy))
+		builder.WriteString(fmt.Sprintf("%2d. %-16s (Added by: %s)\n    -  %s\n", idx+1, entry.Name, addedBy, entry.UUID))
 	}
 
 	builder.WriteString("```")
