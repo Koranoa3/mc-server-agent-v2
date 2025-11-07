@@ -387,9 +387,20 @@ func (b *Bot) handleWhitelistAdd(s *discordgo.Session, i *discordgo.InteractionC
 		content = fmt.Sprintf("%s **%s** は既にホワイトリストに含まれています", allow_icon, profile.Name)
 	}
 
-	s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Content: content,
 	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send followup message")
+	} else if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+		go func(msg *discordgo.Message) {
+			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+			if err := s.FollowupMessageDelete(i.Interaction, msg.ID); err != nil {
+				log.Debug().Err(err).Msg("Failed to delete followup message")
+			}
+		}(msg)
+	}
 
 	// 稼働中のコンテナにホワイトリスト更新を通知
 	b.refreshAllContainersWhitelist()
@@ -462,9 +473,20 @@ func (b *Bot) handleWhitelistRemove(s *discordgo.Session, i *discordgo.Interacti
 		content = fmt.Sprintf("%s **%s** はホワイトリストに含まれていません", allow_icon, profile.Name)
 	}
 
-	s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+	msg, err := s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
 		Content: content,
 	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send followup message")
+	} else if b.settings != nil && b.settings.MessageDeleteAfter > 0 {
+		go func(msg *discordgo.Message) {
+			time.Sleep(time.Duration(b.settings.MessageDeleteAfter) * time.Second)
+			if err := s.FollowupMessageDelete(i.Interaction, msg.ID); err != nil {
+				log.Debug().Err(err).Msg("Failed to delete followup message")
+			}
+		}(msg)
+	}
 
 	// 稼働中のコンテナにホワイトリスト更新を通知
 	b.refreshAllContainersWhitelist()
@@ -496,12 +518,31 @@ func (b *Bot) handleWhitelistList(s *discordgo.Session, i *discordgo.Interaction
 	builder.WriteString("```\n")
 	builder.WriteString(fmt.Sprintf("Total: %d players\n\n", len(entries)))
 
-	for i, entry := range entries {
+	userCache := map[string]string{}
+
+	for idx, entry := range entries {
 		addedBy := "Unknown"
 		if entry.AddedUserID != "" {
-			addedBy = fmt.Sprintf("<@%s>", entry.AddedUserID)
+			if cached, ok := userCache[entry.AddedUserID]; ok {
+				addedBy = cached
+			} else {
+				// Discord APIからユーザー情報を取得
+				user, err := s.User(entry.AddedUserID)
+				if err != nil {
+					// 取得失敗時はIDのみ表示
+					addedBy = fmt.Sprintf("<@%s>", entry.AddedUserID)
+				} else {
+					globalName := user.GlobalName
+					if globalName == "" {
+						globalName = user.Username
+					}
+					addedBy = fmt.Sprintf("%s - %s", globalName, user.Username)
+				}
+				// キャッシュに保存
+				userCache[entry.AddedUserID] = addedBy
+			}
 		}
-		builder.WriteString(fmt.Sprintf("%d. %s (Added by: %s)\n", i+1, entry.Name, addedBy))
+		builder.WriteString(fmt.Sprintf("%2d. %-16s (Added by: %s)\n", idx+1, entry.Name, addedBy))
 	}
 
 	builder.WriteString("```")
