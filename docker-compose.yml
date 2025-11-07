@@ -8,6 +8,7 @@ services:
       - .env
     volumes:
       - ./settings.json:/data/settings.json:rw
+      - ${WHITELIST_SOURCE}:${WHITELIST_PATH}:rw
       - /var/run/docker.sock:/var/run/docker.sock:rw
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
