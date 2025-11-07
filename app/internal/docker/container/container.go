@@ -200,3 +200,31 @@ func (c *Container) computeHash() string {
 func (c *Container) HasChanged(previousHash string) bool {
 	return c.StateHash != previousHash
 }
+
+// RefreshWhitelist は whitelist reload コマンドを実行
+func (c *Container) RefreshWhitelist(ctx context.Context) error {
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"rcon-cli", "whitelist", "reload"},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execID, err := c.client.ContainerExecCreate(ctx, c.ID, execConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	resp, err := c.client.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to attach exec: %w", err)
+	}
+	defer resp.Close()
+
+	// 出力を読み取る
+	_, err = io.ReadAll(resp.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to read exec output: %w", err)
+	}
+
+	return nil
+}
