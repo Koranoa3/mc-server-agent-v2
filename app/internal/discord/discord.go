@@ -126,6 +126,79 @@ func (b *Bot) defineCommands() {
 				},
 			},
 		},
+		{
+			Name:        "whitelist",
+			Description: "Manage Minecraft whitelist",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.Japanese: "ホワイトリスト",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.Japanese: "Minecraftホワイトリストを管理",
+			},
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "add",
+					Description: "Add a player to the whitelist",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "追加",
+					},
+					DescriptionLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "プレイヤーをホワイトリストに追加",
+					},
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "playername",
+							Description: "Player name to add",
+							NameLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "プレイヤー名",
+							},
+							DescriptionLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "追加するプレイヤー名",
+							},
+							Required: true,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "remove",
+					Description: "Remove a player from the whitelist (Admin only)",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "削除",
+					},
+					DescriptionLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "プレイヤーをホワイトリストから削除（管理者のみ）",
+					},
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "playername",
+							Description: "Player name to remove",
+							NameLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "プレイヤー名",
+							},
+							DescriptionLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "削除するプレイヤー名",
+							},
+							Required: true,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "list",
+					Description: "Show the whitelist (Admin only)",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "リスト",
+					},
+					DescriptionLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "ホワイトリストを表示（管理者のみ）",
+					},
+				},
+			},
+		},
 	}
 }
 

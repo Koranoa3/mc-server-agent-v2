@@ -1,12 +1,15 @@
 package discord
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/Koranoa3/mc-server-agent/internal/docker/container"
 	"github.com/Koranoa3/mc-server-agent/internal/routine"
+	"github.com/Koranoa3/mc-server-agent/internal/utilities"
 	"github.com/bwmarrin/discordgo"
 	"github.com/rs/zerolog/log"
 )
@@ -29,6 +32,8 @@ func (b *Bot) handleCommand(s *discordgo.Session, i *discordgo.InteractionCreate
 		b.handleStartCommand(s, i)
 	case "mc-stop":
 		b.handleStopCommand(s, i)
+	case "whitelist":
+		b.handleWhitelistCommand(s, i)
 	default:
 		b.respondError(s, i, "Unknown command")
 	}
@@ -295,5 +300,258 @@ func (b *Bot) respondError(s *discordgo.Session, i *discordgo.InteractionCreate,
 				log.Debug().Err(derr).Msg("Failed to delete interaction response (error)")
 			}
 		}()
+	}
+}
+
+// handleWhitelistCommand は /whitelist コマンドを処理
+func (b *Bot) handleWhitelistCommand(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	options := i.ApplicationCommandData().Options
+	if len(options) == 0 {
+		b.respondError(s, i, "Subcommand is required")
+		return
+	}
+
+	subcommand := options[0]
+
+	switch subcommand.Name {
+	case "add":
+		b.handleWhitelistAdd(s, i, subcommand)
+	case "remove":
+		b.handleWhitelistRemove(s, i, subcommand)
+	case "list":
+		b.handleWhitelistList(s, i)
+	default:
+		b.respondError(s, i, "Unknown subcommand")
+	}
+}
+
+// handleWhitelistAdd はプレイヤーをホワイトリストに追加
+func (b *Bot) handleWhitelistAdd(s *discordgo.Session, i *discordgo.InteractionCreate, subcommand *discordgo.ApplicationCommandInteractionDataOption) {
+	if len(subcommand.Options) == 0 {
+		b.respondError(s, i, "Player name is required")
+		return
+	}
+
+	playerName := subcommand.Options[0].StringValue()
+	whitelistPath := os.Getenv("WHITELIST_PATH")
+	if whitelistPath == "" {
+		b.respondError(s, i, "WHITELIST_PATH environment variable is not set")
+		return
+	}
+
+	// Deferred response
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send deferred response")
+		return
+	}
+
+	// Mojang API でプレイヤー情報を取得
+	profile, err := utilities.FetchMojangProfile(playerName)
+	if err != nil {
+		deny_icon := b.settings.Icons["deny"]
+		content := fmt.Sprintf("%s プレイヤー名が不明です: %s", deny_icon, playerName)
+		if err.Error() != "player not found" {
+			content = fmt.Sprintf("%s エラーが発生しました: %v", deny_icon, err)
+		}
+
+		s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: content,
+		})
+		return
+	}
+
+	// ホワイトリストに追加
+	userID := i.Member.User.ID
+	isNew, err := utilities.AddToWhitelist(whitelistPath, profile.ID, profile.Name, userID)
+	if err != nil {
+		deny_icon := b.settings.Icons["deny"]
+		s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: fmt.Sprintf("%s エラーが発生しました: %v", deny_icon, err),
+		})
+		return
+	}
+
+	// 成功メッセージ
+	allow_icon := b.settings.Icons["allow"]
+	var content string
+	if isNew {
+		content = fmt.Sprintf("%s **%s** を追加しました", allow_icon, profile.Name)
+	} else {
+		content = fmt.Sprintf("%s **%s** は既にホワイトリストに含まれています", allow_icon, profile.Name)
+	}
+
+	s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: content,
+	})
+
+	// 稼働中のコンテナにホワイトリスト更新を通知
+	b.refreshAllContainersWhitelist()
+}
+
+// handleWhitelistRemove はプレイヤーをホワイトリストから削除
+func (b *Bot) handleWhitelistRemove(s *discordgo.Session, i *discordgo.InteractionCreate, subcommand *discordgo.ApplicationCommandInteractionDataOption) {
+	// 管理者権限チェック
+	if !b.isAdmin(i.Member) {
+		b.respondError(s, i, "この操作には管理者権限が必要です")
+		return
+	}
+
+	if len(subcommand.Options) == 0 {
+		b.respondError(s, i, "Player name is required")
+		return
+	}
+
+	playerName := subcommand.Options[0].StringValue()
+	whitelistPath := os.Getenv("WHITELIST_PATH")
+	if whitelistPath == "" {
+		b.respondError(s, i, "WHITELIST_PATH environment variable is not set")
+		return
+	}
+
+	// Deferred response
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseDeferredChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to send deferred response")
+		return
+	}
+
+	// Mojang API でプレイヤー情報を取得
+	profile, err := utilities.FetchMojangProfile(playerName)
+	if err != nil {
+		deny_icon := b.settings.Icons["deny"]
+		content := fmt.Sprintf("%s プレイヤー名が不明です: %s", deny_icon, playerName)
+		if err.Error() != "player not found" {
+			content = fmt.Sprintf("%s エラーが発生しました: %v", deny_icon, err)
+		}
+
+		s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: content,
+		})
+		return
+	}
+
+	// ホワイトリストから削除
+	removed, err := utilities.RemoveFromWhitelist(whitelistPath, profile.ID)
+	if err != nil {
+		deny_icon := b.settings.Icons["deny"]
+		s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+			Content: fmt.Sprintf("%s エラーが発生しました: %v", deny_icon, err),
+		})
+		return
+	}
+
+	// 成功メッセージ
+	allow_icon := b.settings.Icons["allow"]
+	var content string
+	if removed {
+		content = fmt.Sprintf("%s **%s** を削除しました", allow_icon, profile.Name)
+	} else {
+		content = fmt.Sprintf("%s **%s** はホワイトリストに含まれていません", allow_icon, profile.Name)
+	}
+
+	s.FollowupMessageCreate(i.Interaction, true, &discordgo.WebhookParams{
+		Content: content,
+	})
+
+	// 稼働中のコンテナにホワイトリスト更新を通知
+	b.refreshAllContainersWhitelist()
+}
+
+// handleWhitelistList はホワイトリストを表示
+func (b *Bot) handleWhitelistList(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	// 管理者権限チェック
+	if !b.isAdmin(i.Member) {
+		b.respondError(s, i, "この操作には管理者権限が必要です")
+		return
+	}
+
+	whitelistPath := os.Getenv("WHITELIST_PATH")
+	if whitelistPath == "" {
+		b.respondError(s, i, "WHITELIST_PATH environment variable is not set")
+		return
+	}
+
+	// ホワイトリストを読み込み
+	entries, err := utilities.LoadWhitelist(whitelistPath)
+	if err != nil {
+		b.respondError(s, i, fmt.Sprintf("エラーが発生しました: %v", err))
+		return
+	}
+
+	// リストを整形
+	var builder strings.Builder
+	builder.WriteString("```\n")
+	builder.WriteString(fmt.Sprintf("Total: %d players\n\n", len(entries)))
+
+	for i, entry := range entries {
+		addedBy := "Unknown"
+		if entry.AddedUserID != "" {
+			addedBy = fmt.Sprintf("<@%s>", entry.AddedUserID)
+		}
+		builder.WriteString(fmt.Sprintf("%d. %s (Added by: %s)\n", i+1, entry.Name, addedBy))
+	}
+
+	builder.WriteString("```")
+
+	// レスポンスを送信 (ephemeral, message_deleteafter は適用しない)
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: builder.String(),
+			Flags:   discordgo.MessageFlagsEphemeral,
+		},
+	})
+
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to respond to whitelist list command")
+	}
+}
+
+// isAdmin は管理者権限をチェック
+func (b *Bot) isAdmin(member *discordgo.Member) bool {
+	// Administrator 権限を持っているかチェック
+	permissions := int64(member.Permissions)
+	return (permissions & discordgo.PermissionAdministrator) != 0
+}
+
+// refreshAllContainersWhitelist はすべての稼働中コンテナのホワイトリストを更新
+func (b *Bot) refreshAllContainersWhitelist() {
+	containers := b.appState.GetAllContainers()
+	ctx := context.Background()
+
+	for id, containerInterface := range containers {
+		cont, ok := containerInterface.(*container.Container)
+		if !ok {
+			continue
+		}
+
+		// StatusRunning のコンテナのみ更新
+		if cont.Status != container.StatusRunning {
+			continue
+		}
+
+		if err := cont.RefreshWhitelist(ctx); err != nil {
+			log.Error().
+				Err(err).
+				Str("container_id", id).
+				Msg("Failed to refresh whitelist")
+		} else {
+			log.Info().
+				Str("container_id", id).
+				Msg("Whitelist refreshed")
+		}
 	}
 }
