@@ -28,7 +28,7 @@ func (b *Bot) UpdatePresence() {
 
 		if cont.Status == container.StatusRunning {
 			runningCount++
-			totalPlayers += len(cont.Players)
+			totalPlayers += cont.Players
 		}
 	}
 

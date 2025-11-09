@@ -72,8 +72,8 @@ func (b *Bot) buildStatusEmbed() *discordgo.MessageEmbed {
 		value := fmt.Sprintf("%s **%s**", statusIcon, statusText)
 
 		// プレイヤー情報があれば追加
-		if len(cont.Players) > 0 {
-			value += fmt.Sprintf("\n👥 Players: %d", len(cont.Players))
+		if cont.Players > 0 {
+			value += fmt.Sprintf("\n👥 Players: %d", cont.Players)
 		}
 
 		// 自動停止設定

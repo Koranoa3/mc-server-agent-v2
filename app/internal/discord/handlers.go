@@ -179,8 +179,8 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 					b.respondError(s, i, fmt.Sprintf("%s is already stopped.", config.DisplayName))
 					return
 				}
-				if len(cont.Players) > 0 {
-					b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, len(cont.Players)))
+				if cont.Players > 0 {
+					b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, cont.Players))
 					return
 				}
 			}

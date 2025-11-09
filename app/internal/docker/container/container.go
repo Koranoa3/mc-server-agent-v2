@@ -26,7 +26,7 @@ type Container struct {
 	Status      WorkingStatus
 	Image       string
 	Health      string
-	Players     []Player
+	Players     int
 	LastChecked time.Time
 	StopTimer   time.Time
 	StateHash   string
@@ -40,7 +40,7 @@ func NewContainer(cli *client.Client, id, name string) *Container {
 		ID:      id,
 		Name:    name,
 		Status:  StatusUnknown,
-		Players: []Player{},
+		Players: 0,
 		client:  cli,
 	}
 }
@@ -91,7 +91,7 @@ func (c *Container) Update(ctx context.Context) error {
 		} else {
 			c.Players = players
 			// プレイヤーが存在する場合は StopTimer を更新
-			if len(players) > 0 {
+			if players > 0 {
 				c.StopTimer = time.Now()
 			}
 		}
@@ -99,7 +99,7 @@ func (c *Container) Update(ctx context.Context) error {
 	} else {
 		// 停止中はプレイヤーリストをクリア
 		c.Status = StatusStopped
-		c.Players = []Player{}
+		c.Players = 0
 	}
 
 	// ハッシュ生成（状態変更検知用）
@@ -109,7 +109,7 @@ func (c *Container) Update(ctx context.Context) error {
 }
 
 // fetchPlayers はプレイヤー一覧を取得する仮実装
-func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
+func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
 	// rcon-cli list コマンドを実行
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"rcon-cli", "list"},
@@ -119,19 +119,19 @@ func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
 
 	execID, err := c.client.ContainerExecCreate(ctx, c.ID, execConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create exec: %w", err)
+		return 0, fmt.Errorf("failed to create exec: %w", err)
 	}
 
 	resp, err := c.client.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to attach exec: %w", err)
+		return 0, fmt.Errorf("failed to attach exec: %w", err)
 	}
 	defer resp.Close()
 
 	// 出力を読み取る
 	output, err := io.ReadAll(resp.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read exec output: %w", err)
+		return 0, fmt.Errorf("failed to read exec output: %w", err)
 	}
 
 	// "players online: (.+)" の正規表現でマッチング
@@ -139,12 +139,12 @@ func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
 	matches := re.FindStringSubmatch(string(output))
 	if len(matches) < 2 {
 		// マッチしない場合はプレイヤーなし
-		return []Player{}, nil
+		return 0, nil
 	}
 
 	playerNames := matches[1]
 	if playerNames == "" || playerNames == "0" {
-		return []Player{}, nil
+		return 0, nil
 	}
 
 	// カンマ区切りでプレイヤー名を分割
@@ -160,7 +160,7 @@ func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
 		}
 	}
 
-	return players, nil
+	return len(players), nil
 }
 
 // Start はコンテナを起動
@@ -191,7 +191,7 @@ func (c *Container) Restart(ctx context.Context, timeout int) error {
 
 // computeHash は現在の状態からハッシュを計算
 func (c *Container) computeHash() string {
-	data := fmt.Sprintf("%s-%s-%s-%d", c.ID, c.Status.String(), c.Health, len(c.Players))
+	data := fmt.Sprintf("%s-%s-%s-%d", c.ID, c.Status.String(), c.Health, c.Players)
 	hash := sha256.Sum256([]byte(data))
 	return fmt.Sprintf("%x", hash[:8]) // 最初の8バイトのみ
 }
