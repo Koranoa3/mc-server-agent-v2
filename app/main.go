@@ -88,9 +88,6 @@ func main() {
 		}
 		log.Info().Msg("Discord bot started")
 
-		// 初期プレゼンスを設定
-		discordBot.UpdatePresence()
-
 		// Cleanup 時に Discord Bot を停止
 		defer func() {
 			if err := discordBot.Stop(); err != nil {
