@@ -108,8 +108,43 @@ func (c *Container) Update(ctx context.Context) error {
 	return nil
 }
 
-// fetchPlayers はプレイヤー一覧を取得する仮実装
+// fetchPlayers はプレイヤー数を取得
 func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
+	// コンテナをinspectして Health.Log から取得
+	inspect, err := c.client.ContainerInspect(ctx, c.ID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Health チェックが存在しない場合
+	if inspect.State.Health == nil || len(inspect.State.Health.Log) == 0 {
+		return 0, nil
+	}
+
+	// 最後のログエントリを取得
+	lastLog := inspect.State.Health.Log[len(inspect.State.Health.Log)-1]
+	output := lastLog.Output
+
+	// "online=数字" の正規表現でマッチング
+	re := regexp.MustCompile(`online=(\d+)`)
+	matches := re.FindStringSubmatch(output)
+	if len(matches) < 2 {
+		// マッチしない場合はプレイヤーなし
+		return 0, nil
+	}
+
+	// 数字を整数に変換
+	var players int
+	_, err = fmt.Sscanf(matches[1], "%d", &players)
+	if err != nil {
+		return 0, nil
+	}
+
+	return players, nil
+}
+
+// fetchAllPlayers はプレイヤー一覧を取得する仮実装
+func (c *Container) fetchAllPlayers(ctx context.Context) ([]Player, error) {
 	// rcon-cli list コマンドを実行
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"rcon-cli", "list"},
@@ -119,19 +154,19 @@ func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
 
 	execID, err := c.client.ContainerExecCreate(ctx, c.ID, execConfig)
 	if err != nil {
-		return 0, fmt.Errorf("failed to create exec: %w", err)
+		return nil, fmt.Errorf("failed to create exec: %w", err)
 	}
 
 	resp, err := c.client.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
 	if err != nil {
-		return 0, fmt.Errorf("failed to attach exec: %w", err)
+		return nil, fmt.Errorf("failed to attach exec: %w", err)
 	}
 	defer resp.Close()
 
 	// 出力を読み取る
 	output, err := io.ReadAll(resp.Reader)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read exec output: %w", err)
+		return nil, fmt.Errorf("failed to read exec output: %w", err)
 	}
 
 	// "players online: (.+)" の正規表現でマッチング
@@ -139,12 +174,12 @@ func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
 	matches := re.FindStringSubmatch(string(output))
 	if len(matches) < 2 {
 		// マッチしない場合はプレイヤーなし
-		return 0, nil
+		return nil, nil
 	}
 
 	playerNames := matches[1]
 	if playerNames == "" || playerNames == "0" {
-		return 0, nil
+		return nil, nil
 	}
 
 	// カンマ区切りでプレイヤー名を分割
@@ -160,7 +195,7 @@ func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
 		}
 	}
 
-	return len(players), nil
+	return players, nil
 }
 
 // Start はコンテナを起動
