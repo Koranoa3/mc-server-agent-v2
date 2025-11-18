@@ -234,9 +234,6 @@ func (b *Bot) registerHandlers() {
 			Str("username", s.State.User.Username).
 			Str("discriminator", s.State.User.Discriminator).
 			Msg("Discord bot is ready")
-		
-		// 初期プレゼンスを設定
-		b.UpdatePresence()
 	})
 
 	// Interaction Create イベント
