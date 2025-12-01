@@ -143,8 +143,8 @@ func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
 	return players, nil
 }
 
-// fetchAllPlayers はプレイヤー一覧を取得する仮実装
-func (c *Container) fetchAllPlayers(ctx context.Context) ([]Player, error) {
+// FetchAllPlayers はプレイヤー一覧をリアルタイムで取得する（rcon-cli経由）
+func (c *Container) FetchAllPlayers(ctx context.Context) ([]Player, error) {
 	// rcon-cli list コマンドを実行
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"rcon-cli", "list"},

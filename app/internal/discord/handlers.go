@@ -179,8 +179,20 @@ func (b *Bot) executeCommand(s *discordgo.Session, i *discordgo.InteractionCreat
 					b.respondError(s, i, fmt.Sprintf("%s is already stopped.", config.DisplayName))
 					return
 				}
-				if cont.Players > 0 {
-					b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, cont.Players))
+
+				// リアルタイムでプレイヤー数を取得（rcon-cli経由）
+				ctx := context.Background()
+				players, err := cont.FetchAllPlayers(ctx)
+				if err != nil {
+					// rcon-cli失敗時はキャッシュ値にフォールバック
+					log.Warn().Err(err).Str("container", containerID).Msg("Failed to fetch realtime players, using cached value")
+					if cont.Players > 0 {
+						b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, cont.Players))
+						return
+					}
+				} else if len(players) > 0 {
+					// リアルタイム取得成功、プレイヤーがいる場合
+					b.respondError(s, i, fmt.Sprintf("%s cannot be stopped because there are players online (%d players).", config.DisplayName, len(players)))
 					return
 				}
 			}
