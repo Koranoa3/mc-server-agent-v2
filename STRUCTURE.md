@@ -154,7 +154,7 @@ type ContainerManager interface {
       Status       WorkingStatus
       Image        string
       Health       string
-      Players      []Player
+      Players      int
       LastChecked  time.Time
       StateHash    string  // 変更検知用ハッシュ
   }
@@ -196,8 +196,8 @@ type ContainerManager interface {
       Name string
       UUID string
   }
-  
-  func GetPlayers(ctx context.Context, containerID string) ([]Player, error)
+
+  func GetPlayers(ctx context.Context, containerID string) (int, error)
   ```
 - **依存**: Docker client（exec）または RCON ライブラリ（別途検討）。
 

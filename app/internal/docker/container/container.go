@@ -26,7 +26,7 @@ type Container struct {
 	Status      WorkingStatus
 	Image       string
 	Health      string
-	Players     []Player
+	Players     int
 	LastChecked time.Time
 	StopTimer   time.Time
 	StateHash   string
@@ -40,7 +40,7 @@ func NewContainer(cli *client.Client, id, name string) *Container {
 		ID:      id,
 		Name:    name,
 		Status:  StatusUnknown,
-		Players: []Player{},
+		Players: 0,
 		client:  cli,
 	}
 }
@@ -85,13 +85,13 @@ func (c *Container) Update(ctx context.Context) error {
 		}
 
 		// 仮実装：プレイヤー情報を取得（後で実装予定の RCON/exec に置き換える）
-		players, perr := c.fetchPlayers(ctx)
+		players, perr := c.FetchPlayers(ctx)
 		if perr != nil {
 			// プレイヤー取得失敗は致命的にしない。ログは呼び出し側で行う想定。
 		} else {
 			c.Players = players
 			// プレイヤーが存在する場合は StopTimer を更新
-			if len(players) > 0 {
+			if players > 0 {
 				c.StopTimer = time.Now()
 			}
 		}
@@ -99,7 +99,7 @@ func (c *Container) Update(ctx context.Context) error {
 	} else {
 		// 停止中はプレイヤーリストをクリア
 		c.Status = StatusStopped
-		c.Players = []Player{}
+		c.Players = 0
 	}
 
 	// ハッシュ生成（状態変更検知用）
@@ -108,8 +108,43 @@ func (c *Container) Update(ctx context.Context) error {
 	return nil
 }
 
-// fetchPlayers はプレイヤー一覧を取得する仮実装
-func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
+// fetchPlayers はプレイヤー数を取得
+func (c *Container) FetchPlayers(ctx context.Context) (int, error) {
+	// コンテナをinspectして Health.Log から取得
+	inspect, err := c.client.ContainerInspect(ctx, c.ID)
+	if err != nil {
+		return 0, fmt.Errorf("failed to inspect container: %w", err)
+	}
+
+	// Health チェックが存在しない場合
+	if inspect.State.Health == nil || len(inspect.State.Health.Log) == 0 {
+		return 0, nil
+	}
+
+	// 最後のログエントリを取得
+	lastLog := inspect.State.Health.Log[len(inspect.State.Health.Log)-1]
+	output := lastLog.Output
+
+	// "online=数字" の正規表現でマッチング
+	re := regexp.MustCompile(`online=(\d+)`)
+	matches := re.FindStringSubmatch(output)
+	if len(matches) < 2 {
+		// マッチしない場合はプレイヤーなし
+		return 0, nil
+	}
+
+	// 数字を整数に変換
+	var players int
+	_, err = fmt.Sscanf(matches[1], "%d", &players)
+	if err != nil {
+		return 0, nil
+	}
+
+	return players, nil
+}
+
+// FetchAllPlayers はプレイヤー一覧をリアルタイムで取得する（rcon-cli経由）
+func (c *Container) FetchAllPlayers(ctx context.Context) ([]Player, error) {
 	// rcon-cli list コマンドを実行
 	execConfig := container.ExecOptions{
 		Cmd:          []string{"rcon-cli", "list"},
@@ -139,12 +174,12 @@ func (c *Container) fetchPlayers(ctx context.Context) ([]Player, error) {
 	matches := re.FindStringSubmatch(string(output))
 	if len(matches) < 2 {
 		// マッチしない場合はプレイヤーなし
-		return []Player{}, nil
+		return nil, nil
 	}
 
 	playerNames := matches[1]
 	if playerNames == "" || playerNames == "0" {
-		return []Player{}, nil
+		return nil, nil
 	}
 
 	// カンマ区切りでプレイヤー名を分割
@@ -191,7 +226,7 @@ func (c *Container) Restart(ctx context.Context, timeout int) error {
 
 // computeHash は現在の状態からハッシュを計算
 func (c *Container) computeHash() string {
-	data := fmt.Sprintf("%s-%s-%s-%d", c.ID, c.Status.String(), c.Health, len(c.Players))
+	data := fmt.Sprintf("%s-%s-%s-%d", c.ID, c.Status.String(), c.Health, c.Players)
 	hash := sha256.Sum256([]byte(data))
 	return fmt.Sprintf("%x", hash[:8]) // 最初の8バイトのみ
 }
@@ -199,4 +234,32 @@ func (c *Container) computeHash() string {
 // HasChanged は前回から状態が変わったかチェック
 func (c *Container) HasChanged(previousHash string) bool {
 	return c.StateHash != previousHash
+}
+
+// RefreshWhitelist は whitelist reload コマンドを実行
+func (c *Container) RefreshWhitelist(ctx context.Context) error {
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"rcon-cli", "whitelist", "reload"},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execID, err := c.client.ContainerExecCreate(ctx, c.ID, execConfig)
+	if err != nil {
+		return fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	resp, err := c.client.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to attach exec: %w", err)
+	}
+	defer resp.Close()
+
+	// 出力を読み取る
+	_, err = io.ReadAll(resp.Reader)
+	if err != nil {
+		return fmt.Errorf("failed to read exec output: %w", err)
+	}
+
+	return nil
 }

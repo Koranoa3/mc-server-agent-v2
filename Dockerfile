@@ -1,21 +1,20 @@
-FROM golang:1.24-alpine AS build
-WORKDIR /src/app
+FROM debian:12-slim
 
-# Download dependencies (module files are in app/)
-COPY app/go.mod app/go.sum ./
-RUN apk add --no-cache git && \
-    go env -w GOPROXY=https://proxy.golang.org,direct && \
-    go mod download
+# CA証明書をインストール
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
 
-# Copy only app sources into build context
-COPY app/ .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /mc-agent
+# アプリケーション用ユーザーとグループを作成
+RUN groupadd -r app && useradd -r -g app app
 
-FROM alpine:3.18
-RUN addgroup -S app && adduser -S -G app app
-COPY --from=build /mc-agent /usr/local/bin/mc-agent
+# ビルド済みバイナリをコピー
+COPY mc-agent /usr/local/bin/mc-agent
+RUN chmod +x /usr/local/bin/mc-agent
+
 WORKDIR /data
 RUN chown app:app /data || true
 USER app
 ENV SETTINGS_PATH=/data/settings.json
 ENTRYPOINT ["/usr/local/bin/mc-agent"]
+

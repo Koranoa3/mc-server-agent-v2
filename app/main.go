@@ -162,7 +162,12 @@ func main() {
 				Str("container", update.ContainerID).
 				Bool("changed", update.Changed).
 				Msg("Status update received")
-			// TODO: Discord へ通知
+
+			// Discord Bot のプレゼンスと最後の常駐メッセージを更新
+			if discordBot != nil {
+				discordBot.UpdatePresence()
+				discordBot.UpdatePinnedMessages()
+			}
 
 		case err := <-errorChan:
 			log.Error().Err(err).Msg("Error received")

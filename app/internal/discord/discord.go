@@ -126,6 +126,79 @@ func (b *Bot) defineCommands() {
 				},
 			},
 		},
+		{
+			Name:        "whitelist",
+			Description: "Manage Minecraft whitelist",
+			NameLocalizations: &map[discordgo.Locale]string{
+				discordgo.Japanese: "ホワイトリスト",
+			},
+			DescriptionLocalizations: &map[discordgo.Locale]string{
+				discordgo.Japanese: "Minecraftホワイトリストを管理",
+			},
+			Options: []*discordgo.ApplicationCommandOption{
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "add",
+					Description: "Add a player to the whitelist",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "追加",
+					},
+					DescriptionLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "プレイヤーをホワイトリストに追加",
+					},
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "playername",
+							Description: "Player name to add",
+							NameLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "プレイヤー名",
+							},
+							DescriptionLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "追加するプレイヤー名",
+							},
+							Required: true,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "remove",
+					Description: "Remove a player from the whitelist (Admin only)",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "削除",
+					},
+					DescriptionLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "プレイヤーをホワイトリストから削除（管理者のみ）",
+					},
+					Options: []*discordgo.ApplicationCommandOption{
+						{
+							Type:        discordgo.ApplicationCommandOptionString,
+							Name:        "playername",
+							Description: "Player name to remove",
+							NameLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "プレイヤー名",
+							},
+							DescriptionLocalizations: map[discordgo.Locale]string{
+								discordgo.Japanese: "削除するプレイヤー名",
+							},
+							Required: true,
+						},
+					},
+				},
+				{
+					Type:        discordgo.ApplicationCommandOptionSubCommand,
+					Name:        "list",
+					Description: "Show the whitelist (Admin only)",
+					NameLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "リスト",
+					},
+					DescriptionLocalizations: map[discordgo.Locale]string{
+						discordgo.Japanese: "ホワイトリストを表示（管理者のみ）",
+					},
+				},
+			},
+		},
 	}
 }
 
@@ -161,6 +234,9 @@ func (b *Bot) registerHandlers() {
 			Str("username", s.State.User.Username).
 			Str("discriminator", s.State.User.Discriminator).
 			Msg("Discord bot is ready")
+
+		// 初期プレゼンスを設定
+		b.UpdatePresence()
 	})
 
 	// Interaction Create イベント
@@ -262,4 +338,71 @@ func (b *Bot) UnregisterCommands() error {
 // Session は Discord セッションを返す
 func (b *Bot) Session() *discordgo.Session {
 	return b.session
+}
+
+// UpdatePinnedMessages は📌リアクションがついた Bot のメッセージをすべて更新
+func (b *Bot) UpdatePinnedMessages() {
+	log.Info().Msg("Updating pinned messages")
+
+	// すべての登録済みチャンネルを取得
+	// guildID からギルドの全チャンネルを取得
+	channels, err := b.session.GuildChannels(b.guildID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to get guild channels")
+		return
+	}
+
+	updatedCount := 0
+
+	// 各チャンネルでピン留めされたメッセージを確認
+	for _, channel := range channels {
+		// テキストチャンネルのみ対象
+		if channel.Type != discordgo.ChannelTypeGuildText {
+			continue
+		}
+
+		// 各チャンネルのピン留めメッセージを取得
+		messages, err := b.session.ChannelMessagesPinned(channel.ID)
+		if err != nil {
+			log.Error().Err(err).Str("channel_id", channel.ID).Msg("Failed to get channel messages")
+			continue
+		}
+
+		// 各メッセージを確認
+		for _, msg := range messages {
+			// Bot 自身のメッセージかつ、Embeds または Components があるかチェック
+			if msg.Author.ID != b.session.State.User.ID || (len(msg.Embeds) == 0 && len(msg.Components) == 0) {
+				continue
+			}
+
+			// メッセージを更新
+			embed := b.buildStatusEmbed()
+			components := b.buildActionButtons()
+
+			_, err := b.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				Channel:    msg.ChannelID,
+				ID:         msg.ID,
+				Embeds:     &[]*discordgo.MessageEmbed{embed},
+				Components: &components,
+			})
+
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("channel_id", msg.ChannelID).
+					Str("message_id", msg.ID).
+					Msg("Failed to update pinned message")
+			} else {
+				log.Debug().
+					Str("channel_id", msg.ChannelID).
+					Str("message_id", msg.ID).
+					Msg("Updated pinned message")
+				updatedCount++
+			}
+		}
+	}
+
+	log.Info().
+		Int("updated_messages", updatedCount).
+		Msg("Pinned messages update completed")
 }

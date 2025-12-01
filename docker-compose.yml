@@ -1,14 +1,34 @@
 services:
-  mc-agent:
-    build: .
+  mc-agent-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
     image: mc-server-agent:latest
-    container_name: mc-server-agent
+    container_name: mc-server-agent-dev
     user: "${UID}:${DOCKER_GID}"
     env_file:
       - .env
     volumes:
       - ./settings.json:/data/settings.json:rw
+      - ${WHITELIST_SOURCE}:${WHITELIST_PATH}:rw
       - /var/run/docker.sock:/var/run/docker.sock:rw
+    environment:
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    # restart: unless-stopped
+  
+  mc-agent-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: mc-server-agent:latest
+    container_name: mc-server-agent-prod
+    user: "${UID}:${DOCKER_GID}"
+    env_file:
+      - .env
+    volumes:
+      - ./settings.json:/data/settings.json:ro
+      - ${WHITELIST_SOURCE}:${WHITELIST_PATH}:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
     environment:
       - DOCKER_HOST=unix:///var/run/docker.sock
     # restart: unless-stopped
