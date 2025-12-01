@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/docker/docker/api/types/container"
@@ -137,6 +138,61 @@ func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
 	_, err = fmt.Sscanf(matches[1], "%d", &players)
 	if err != nil {
 		return 0, nil
+	}
+
+	return players, nil
+}
+
+// fetchAllPlayers はプレイヤー一覧を取得する仮実装
+func (c *Container) fetchAllPlayers(ctx context.Context) ([]Player, error) {
+	// rcon-cli list コマンドを実行
+	execConfig := container.ExecOptions{
+		Cmd:          []string{"rcon-cli", "list"},
+		AttachStdout: true,
+		AttachStderr: true,
+	}
+
+	execID, err := c.client.ContainerExecCreate(ctx, c.ID, execConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create exec: %w", err)
+	}
+
+	resp, err := c.client.ContainerExecAttach(ctx, execID.ID, container.ExecStartOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to attach exec: %w", err)
+	}
+	defer resp.Close()
+
+	// 出力を読み取る
+	output, err := io.ReadAll(resp.Reader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read exec output: %w", err)
+	}
+
+	// "players online: (.+)" の正規表現でマッチング
+	re := regexp.MustCompile(`players online:\s*(.+)`)
+	matches := re.FindStringSubmatch(string(output))
+	if len(matches) < 2 {
+		// マッチしない場合はプレイヤーなし
+		return nil, nil
+	}
+
+	playerNames := matches[1]
+	if playerNames == "" || playerNames == "0" {
+		return nil, nil
+	}
+
+	// カンマ区切りでプレイヤー名を分割
+	names := strings.Split(playerNames, ",")
+	players := make([]Player, 0, len(names))
+	for _, name := range names {
+		name = strings.TrimSpace(name)
+		if name != "" {
+			players = append(players, Player{
+				Name: name,
+				UUID: "", // RCON では UUID が取得できないため空
+			})
+		}
 	}
 
 	return players, nil
