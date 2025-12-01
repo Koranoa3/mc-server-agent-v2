@@ -85,7 +85,7 @@ func (c *Container) Update(ctx context.Context) error {
 		}
 
 		// 仮実装：プレイヤー情報を取得（後で実装予定の RCON/exec に置き換える）
-		players, perr := c.fetchPlayers(ctx)
+		players, perr := c.FetchPlayers(ctx)
 		if perr != nil {
 			// プレイヤー取得失敗は致命的にしない。ログは呼び出し側で行う想定。
 		} else {
@@ -109,7 +109,7 @@ func (c *Container) Update(ctx context.Context) error {
 }
 
 // fetchPlayers はプレイヤー数を取得
-func (c *Container) fetchPlayers(ctx context.Context) (int, error) {
+func (c *Container) FetchPlayers(ctx context.Context) (int, error) {
 	// コンテナをinspectして Health.Log から取得
 	inspect, err := c.client.ContainerInspect(ctx, c.ID)
 	if err != nil {
